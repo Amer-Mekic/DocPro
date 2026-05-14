@@ -1,0 +1,22 @@
+services:
+  DocProDB:
+    image: postgres:18
+    container_name: DocProDB
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+
+  docproapi:
+    build: ./backend
+    container_name: DocProAPI
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:1234@DocProDB:5432/postgres
+    depends_on:
+      - DocProDB
+    volumes:
+      - ./backend:/app
