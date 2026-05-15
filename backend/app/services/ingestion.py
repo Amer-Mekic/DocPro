@@ -1,12 +1,12 @@
+import base64
+import json
 import os
-from pathlib import Path
 
-import cv2
-import numpy as np
 import pandas as pd
 import pdfplumber
-import pytesseract
-from pytesseract import Output
+
+from app.services.llm_client import get_client, get_llm_model
+from app.services.extraction import extract_document_from_image
 
 
 def parse_file(file_path: str, extension: str) -> str:
@@ -55,20 +55,8 @@ def _parse_pdf(file_path: str) -> str:
 
 
 def _parse_image(file_path: str) -> str:
-    """Extract text with multiple PSM values, pick best."""
-    image = cv2.imread(file_path)
-    if image is None:
-        raise ValueError(f"Failed to read image: {file_path}")
-
-    image = cv2.resize(image, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    denoised = cv2.medianBlur(gray, 3)
-    
-    thresh = cv2.adaptiveThreshold(denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                cv2.THRESH_BINARY, 11, 2)
-    text = pytesseract.image_to_string(thresh, config='--psm 6')
-    return text
+    extracted = extract_document_from_image(file_path)
+    return json.dumps(extracted, ensure_ascii=False)
 
 def _parse_csv(file_path: str) -> str:
     """Convert CSV to readable key-value text format."""
