@@ -8,6 +8,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
+    volumes:
+      - docprodb_data:/var/lib/postgresql/data
 
   docproapi:
     build: ./backend
@@ -22,3 +24,8 @@ services:
       - DocProDB
     volumes:
       - ./backend:/app
+      - ./backend/uploads:/app/uploads
+    command: ["/bin/sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+
+volumes:
+  docprodb_data:

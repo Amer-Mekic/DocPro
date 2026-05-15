@@ -9,7 +9,6 @@ Build a full-stack document processing application. Users upload business docume
 - **Parsing:** pdfplumber (PDF), pytesseract + OpenCV (images), pandas (CSV)
 - **Frontend:** React, Vite, Tailwind CSS
 - **Deployment:** Docker + docker-compose, Railway
-- **Tests:** pytest
 
 ## Project structure
 project-root/

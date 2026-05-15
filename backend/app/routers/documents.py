@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Query
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -23,7 +23,10 @@ from app.schemas.document import (
 from app.services.extraction import extract_document, extract_document_from_image
 from app.services.ingestion import parse_file
 from app.services.validation import refresh_validation
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
+limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 UPLOADS_DIR = Path(__file__).parent.parent.parent / "uploads"
@@ -120,7 +123,9 @@ def _serialize_document(doc: Document, full: bool = False) -> dict:
         }
     },
 )
+@limiter.limit("4/hour")
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> dict:
