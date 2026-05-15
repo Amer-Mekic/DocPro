@@ -6,6 +6,32 @@ from pydantic import BaseModel
 from typing import Any, List, Dict
 
 
+class DocumentUploadResponse(BaseModel):
+    id: UUID
+    status: str
+    file_path: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class LineItemResponse(BaseModel):
+    id: UUID
+    description: str | None
+    quantity: Decimal | None
+    unit_price: Decimal | None
+    line_total: Decimal | None
+
+
+class ValidationIssueResponse(BaseModel):
+    id: UUID
+    field_name: str | None
+    issue_type: str | None
+    message: str | None
+    severity: str | None
+
+
 class DocumentResponse(BaseModel):
     id: UUID
     status: str
@@ -21,16 +47,8 @@ class DocumentResponse(BaseModel):
     raw_text: str | None
     file_path: str | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class DocumentUploadResponse(BaseModel):
-    id: UUID
-    status: str
-    file_path: str
-    created_at: datetime
+    line_items: list[LineItemResponse] | None = None
+    validation_issues: list[ValidationIssueResponse] | None = None
 
     class Config:
         from_attributes = True
@@ -123,3 +141,8 @@ class DocumentListEnvelope(BaseModel):
                 "errors": [],
             }
         }
+
+
+class DocumentUploadEnvelope(BaseModel):
+    data: DocumentUploadResponse | None = None
+    errors: List[ErrorItem] = []

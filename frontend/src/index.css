@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-fog text-ink font-body;
+  background-image:
+    radial-gradient(1200px 600px at 10% -10%, rgba(61, 214, 181, 0.25), transparent 60%),
+    radial-gradient(900px 500px at 95% 0%, rgba(255, 159, 28, 0.2), transparent 60%);
+}
+
+#root {
+  @apply min-h-screen;
+}
+
+.card {
+  @apply bg-white/90 border border-white/70 shadow-sm backdrop-blur;
+}
+
+.badge {
+  @apply inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold;
+}

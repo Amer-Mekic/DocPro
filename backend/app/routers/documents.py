@@ -18,6 +18,7 @@ from app.schemas.document import (
     DocumentResponse,
     DocumentEnvelope,
     DocumentListEnvelope,
+    DocumentUploadEnvelope,
 )
 from app.services.extraction import extract_document, extract_document_from_image
 from app.services.ingestion import parse_file
@@ -105,7 +106,7 @@ def _serialize_document(doc: Document, full: bool = False) -> dict:
 
 @router.post(
     "/upload",
-    response_model=DocumentEnvelope,
+    response_model=DocumentUploadEnvelope,
     responses={
         200: {
             "content": {
