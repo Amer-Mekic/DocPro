@@ -3,6 +3,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel
+from typing import Any, List, Dict
 
 
 class DocumentResponse(BaseModel):
@@ -53,3 +54,72 @@ class DocumentPatchRequest(BaseModel):
     tax: Decimal | None = None
     total: Decimal | None = None
     line_items: list[LineItemUpdate] | None = None
+
+
+class ErrorItem(BaseModel):
+    field: str | None = None
+    message: str
+
+
+class Envelope(BaseModel):
+    data: Any | None = None
+    errors: List[ErrorItem] = []
+
+
+class DocumentEnvelope(BaseModel):
+    data: DocumentResponse | None = None
+    errors: List[ErrorItem] = []
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "data": {
+                    "id": "00000000-0000-0000-0000-000000000000",
+                    "status": "validated",
+                    "doc_type": "invoice",
+                    "supplier_name": "ACME Corp",
+                    "document_number": "INV-100",
+                    "issue_date": "2026-05-01",
+                    "due_date": "2026-05-15",
+                    "currency": "USD",
+                    "subtotal": 100.0,
+                    "tax": 10.0,
+                    "total": 110.0,
+                    "raw_text": "...",
+                    "file_path": "uploads/000.png",
+                    "line_items": [
+                        {"id": "00000000-0000-0000-0000-000000000001", "description": "Item A", "quantity": 1, "unit_price": 100.0, "line_total": 100.0}
+                    ],
+                    "validation_issues": [],
+                    "created_at": "2026-05-15T12:00:00Z",
+                },
+                "errors": [],
+            }
+        }
+
+
+class DocumentListEnvelope(BaseModel):
+    data: Dict[str, Any]
+    errors: List[ErrorItem] = []
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "data": {
+                    "items": [
+                        {
+                            "id": "00000000-0000-0000-0000-000000000000",
+                            "status": "validated",
+                            "doc_type": "invoice",
+                            "supplier_name": "ACME Corp",
+                            "document_number": "INV-100",
+                            "total": 110.0,
+                            "currency": "USD",
+                            "created_at": "2026-05-15T12:00:00Z",
+                        }
+                    ],
+                    "meta": {"page": 1, "page_size": 20, "total": 1},
+                },
+                "errors": [],
+            }
+        }

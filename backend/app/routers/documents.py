@@ -4,14 +4,21 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.database import get_db
 from app.models.document import Document
 from app.models.line_item import LineItem
 from app.models.validation_issue import ValidationIssue
-from app.schemas.document import DocumentPatchRequest, DocumentUploadResponse, DocumentResponse
+from app.schemas.document import (
+    DocumentPatchRequest,
+    DocumentUploadResponse,
+    DocumentResponse,
+    DocumentEnvelope,
+    DocumentListEnvelope,
+)
 from app.services.extraction import extract_document, extract_document_from_image
 from app.services.ingestion import parse_file
 from app.services.validation import refresh_validation
@@ -51,11 +58,71 @@ def _load_line_items(document: Document, line_items: list[dict]) -> None:
         )
 
 
-@router.post("/upload", response_model=DocumentUploadResponse)
+def _serialize_line_item(item: LineItem) -> dict:
+    return {
+        "id": item.id,
+        "description": item.description,
+        "quantity": float(item.quantity) if item.quantity is not None else None,
+        "unit_price": float(item.unit_price) if item.unit_price is not None else None,
+        "line_total": float(item.line_total) if item.line_total is not None else None,
+    }
+
+
+def _serialize_issue(issue: ValidationIssue) -> dict:
+    return {
+        "id": issue.id,
+        "field_name": issue.field_name,
+        "issue_type": issue.issue_type,
+        "message": issue.message,
+        "severity": issue.severity,
+    }
+
+
+def _serialize_document(doc: Document, full: bool = False) -> dict:
+    base = {
+        "id": doc.id,
+        "status": doc.status,
+        "doc_type": doc.doc_type,
+        "supplier_name": doc.supplier_name,
+        "document_number": doc.document_number,
+        "issue_date": doc.issue_date.isoformat() if doc.issue_date else None,
+        "due_date": doc.due_date.isoformat() if doc.due_date else None,
+        "currency": doc.currency,
+        "subtotal": float(doc.subtotal) if doc.subtotal is not None else None,
+        "tax": float(doc.tax) if doc.tax is not None else None,
+        "total": float(doc.total) if doc.total is not None else None,
+        "file_path": doc.file_path,
+        "created_at": doc.created_at.isoformat() if doc.created_at else None,
+    }
+
+    if full:
+        base["raw_text"] = doc.raw_text
+        base["line_items"] = [_serialize_line_item(i) for i in doc.line_items]
+        base["validation_issues"] = [_serialize_issue(i) for i in doc.validation_issues]
+
+    return base
+
+
+@router.post(
+    "/upload",
+    response_model=DocumentEnvelope,
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "data": {"id": "00000000-0000-0000-0000-000000000000", "status": "uploaded", "file_path": "uploads/000.png", "created_at": "2026-05-15T12:00:00Z"},
+                        "errors": [],
+                    }
+                }
+            }
+        }
+    },
+)
 async def upload_document(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-) -> DocumentUploadResponse:
+) -> dict:
     if not file.filename:
         raise HTTPException(status_code=400, detail="File must have a name")
 
@@ -120,12 +187,7 @@ async def upload_document(
             )
             db.commit()
 
-        return DocumentUploadResponse(
-            id=document.id,
-            status=document.status,
-            file_path=document.file_path,
-            created_at=document.created_at,
-        )
+        return {"data": {"id": document.id, "status": document.status, "file_path": document.file_path, "created_at": document.created_at}, "errors": []}
 
     except HTTPException:
         raise
@@ -134,12 +196,12 @@ async def upload_document(
         raise HTTPException(status_code=500, detail=f"Internal server error: {error}")
 
 
-@router.patch("/{document_id}", response_model=DocumentResponse)
+@router.patch("/{document_id}", response_model=DocumentEnvelope)
 async def patch_document(
     document_id: uuid.UUID,
     payload: DocumentPatchRequest,
     db: Session = Depends(get_db),
-) -> DocumentResponse:
+ ) -> dict:
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -165,14 +227,92 @@ async def patch_document(
     refresh_validation(document, db)
     db.commit()
     db.refresh(document)
-    return document
+    return {"data": _serialize_document(document, full=True), "errors": []}
 
 
-@router.post("/{document_id}/validate", response_model=DocumentResponse)
+@router.post("/{document_id}/confirm", response_model=DocumentEnvelope)
+async def confirm_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    document.validation_issues.clear()
+    document.status = "validated"
+    db.commit()
+    db.refresh(document)
+    return {"data": _serialize_document(document, full=True), "errors": []}
+
+
+@router.post("/{document_id}/reject", response_model=DocumentEnvelope)
+async def reject_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    document.status = "rejected"
+    db.commit()
+    db.refresh(document)
+    return {"data": _serialize_document(document, full=True), "errors": []}
+
+
+@router.get("/", response_model=DocumentListEnvelope)
+async def list_documents(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> dict:
+    query = db.query(Document)
+    total = query.count()
+    items = (
+        query.order_by(Document.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    data = [
+        {
+            "id": item.id,
+            "status": item.status,
+            "doc_type": item.doc_type,
+            "supplier_name": item.supplier_name,
+            "document_number": item.document_number,
+            "total": float(item.total) if item.total is not None else None,
+            "currency": item.currency,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+        }
+        for item in items
+    ]
+
+    meta = {"page": page, "page_size": page_size, "total": total}
+    return {"data": {"items": data, "meta": meta}, "errors": []}
+
+
+@router.get("/{document_id}", response_model=DocumentEnvelope)
+async def get_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return {"data": _serialize_document(document, full=True), "errors": []}
+
+
+@router.get("/dashboard/summary")
+async def dashboard_summary(db: Session = Depends(get_db)) -> dict:
+    counts = db.query(Document.status, func.count()).group_by(Document.status).all()
+    totals = db.query(Document.currency, func.sum(Document.total)).group_by(Document.currency).all()
+
+    counts_map = {status: count for status, count in counts}
+    totals_map = {currency: float(total) if total is not None else 0.0 for currency, total in totals}
+
+    return {"data": {"counts": counts_map, "totals": totals_map}, "errors": []}
+
+
+@router.post("/{document_id}/validate", response_model=DocumentEnvelope)
 async def validate_document(
     document_id: uuid.UUID,
     db: Session = Depends(get_db),
-) -> DocumentResponse:
+ ) -> dict:
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -180,4 +320,4 @@ async def validate_document(
     refresh_validation(document, db)
     db.commit()
     db.refresh(document)
-    return document
+    return {"data": _serialize_document(document, full=True), "errors": []}
