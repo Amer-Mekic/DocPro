@@ -11,9 +11,10 @@ from app.database import get_db
 from app.models.document import Document
 from app.models.line_item import LineItem
 from app.models.validation_issue import ValidationIssue
-from app.schemas.document import DocumentUploadResponse
+from app.schemas.document import DocumentPatchRequest, DocumentUploadResponse, DocumentResponse
 from app.services.extraction import extract_document, extract_document_from_image
 from app.services.ingestion import parse_file
+from app.services.validation import refresh_validation
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -35,6 +36,19 @@ def _json_safe(value):
     if isinstance(value, dict):
         return {key: _json_safe(item) for key, item in value.items()}
     return value
+
+
+def _load_line_items(document: Document, line_items: list[dict]) -> None:
+    document.line_items.clear()
+    for item in line_items:
+        document.line_items.append(
+            LineItem(
+                description=item.get("description"),
+                quantity=item.get("quantity"),
+                unit_price=item.get("unit_price"),
+                line_total=item.get("line_total"),
+            )
+        )
 
 
 @router.post("/upload", response_model=DocumentUploadResponse)
@@ -90,18 +104,8 @@ async def upload_document(
             document.tax = extracted.get("tax")
             document.total = extracted.get("total")
 
-            document.line_items.clear()
-            for item in extracted.get("line_items", []):
-                document.line_items.append(
-                    LineItem(
-                        description=item.get("description"),
-                        quantity=item.get("quantity"),
-                        unit_price=item.get("unit_price"),
-                        line_total=item.get("line_total"),
-                    )
-                )
-
-            document.status = "validated"
+            _load_line_items(document, extracted.get("line_items", []))
+            refresh_validation(document, db)
             db.commit()
 
         except Exception as extraction_error:
@@ -128,3 +132,52 @@ async def upload_document(
     except Exception as error:
         file_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Internal server error: {error}")
+
+
+@router.patch("/{document_id}", response_model=DocumentResponse)
+async def patch_document(
+    document_id: uuid.UUID,
+    payload: DocumentPatchRequest,
+    db: Session = Depends(get_db),
+) -> DocumentResponse:
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    line_items = update_data.pop("line_items", None)
+
+    for field_name, value in update_data.items():
+        setattr(document, field_name, value)
+
+    if line_items is not None:
+        document.line_items.clear()
+        for item in line_items:
+            document.line_items.append(
+                LineItem(
+                    description=item.description,
+                    quantity=item.quantity,
+                    unit_price=item.unit_price,
+                    line_total=item.line_total,
+                )
+            )
+
+    refresh_validation(document, db)
+    db.commit()
+    db.refresh(document)
+    return document
+
+
+@router.post("/{document_id}/validate", response_model=DocumentResponse)
+async def validate_document(
+    document_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> DocumentResponse:
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    refresh_validation(document, db)
+    db.commit()
+    db.refresh(document)
+    return document

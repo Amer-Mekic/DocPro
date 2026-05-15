@@ -33,3 +33,23 @@ class DocumentUploadResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class LineItemUpdate(BaseModel):
+    description: str | None = None
+    quantity: Decimal | None = None
+    unit_price: Decimal | None = None
+    line_total: Decimal | None = None
+
+
+class DocumentPatchRequest(BaseModel):
+    doc_type: str | None = None
+    supplier_name: str | None = None
+    document_number: str | None = None
+    issue_date: date | None = None
+    due_date: date | None = None
+    currency: str | None = None
+    subtotal: Decimal | None = None
+    tax: Decimal | None = None
+    total: Decimal | None = None
+    line_items: list[LineItemUpdate] | None = None
