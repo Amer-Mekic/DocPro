@@ -265,7 +265,7 @@ async def reject_document(document_id: uuid.UUID, db: Session = Depends(get_db))
     return {"data": _serialize_document(document, full=True), "errors": []}
 
 
-@router.get("/", response_model=DocumentListEnvelope)
+@router.get("", response_model=DocumentListEnvelope)
 async def list_documents(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
