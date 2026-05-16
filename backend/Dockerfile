@@ -22,4 +22,4 @@ USER appuser
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
+CMD ["sh", "-c", "gunicorn -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:${PORT} app.main:app"]
