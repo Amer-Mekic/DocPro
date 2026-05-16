@@ -221,12 +221,16 @@ async def patch_document(
     if line_items is not None:
         document.line_items.clear()
         for item in line_items:
+            if isinstance(item, dict):
+                data = item
+            else:
+                data = item.model_dump()
             document.line_items.append(
                 LineItem(
-                    description=item.description,
-                    quantity=item.quantity,
-                    unit_price=item.unit_price,
-                    line_total=item.line_total,
+                    description=data.get("description"),
+                    quantity=data.get("quantity"),
+                    unit_price=data.get("unit_price"),
+                    line_total=data.get("line_total"),
                 )
             )
 

@@ -89,7 +89,7 @@ class DocumentEnvelope(BaseModel):
     errors: List[ErrorItem] = []
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "data": {
                     "id": "00000000-0000-0000-0000-000000000000",
@@ -121,7 +121,7 @@ class DocumentListEnvelope(BaseModel):
     errors: List[ErrorItem] = []
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "data": {
                     "items": [

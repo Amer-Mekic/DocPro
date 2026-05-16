@@ -15,6 +15,7 @@ export default function Review(){
   const navigate = useNavigate()
   const [doc, setDoc] = useState<DocumentData | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const fieldRefs = {
     supplier_name: useRef<HTMLDivElement>(null),
@@ -57,21 +58,28 @@ export default function Review(){
   async function save(){
     if(!doc || !id) return
     setSaving(true)
-    await patchDocument(id, {
-      supplier_name: doc.supplier_name,
-      document_number: doc.document_number,
-      doc_type: doc.doc_type,
-      issue_date: doc.issue_date,
-      due_date: doc.due_date,
-      currency: doc.currency,
-      subtotal: doc.subtotal,
-      tax: doc.tax,
-      total: doc.total,
-      line_items: doc.line_items || [],
-    })
-    const refreshed = await getDocument(id)
-    setDoc(refreshed.data)
-    setSaving(false)
+    setSaveError(null)
+    try{
+      await patchDocument(id, {
+        supplier_name: doc.supplier_name,
+        document_number: doc.document_number,
+        doc_type: doc.doc_type,
+        issue_date: doc.issue_date,
+        due_date: doc.due_date,
+        currency: doc.currency,
+        subtotal: doc.subtotal,
+        tax: doc.tax,
+        total: doc.total,
+        line_items: doc.line_items || [],
+      })
+      const refreshed = await getDocument(id)
+      setDoc(refreshed.data)
+    }catch(error){
+      const message = error instanceof Error ? error.message : 'Save failed'
+      setSaveError(message)
+    }finally{
+      setSaving(false)
+    }
   }
 
   async function doConfirm(){
@@ -157,6 +165,9 @@ export default function Review(){
           </div>
 
           <LineItemsTable items={doc.line_items || []} onChange={(items)=> setField('line_items', items)} />
+          {saveError ? (
+            <div className="text-xs text-red-600 mb-3">Save failed: {saveError}</div>
+          ) : null}
           <ActionBar saving={saving} onSave={save} onValidate={doValidate} onConfirm={doConfirm} onReject={doReject} />
         </div>
       </div>
