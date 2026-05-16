@@ -85,6 +85,12 @@ The compose file runs Alembic migrations before the API starts. PostgreSQL data 
 - OpenAI-compatible LLM API for text and image extraction.
 - GitHub Copilot - pair coding.
 
+## Deployment:
+
+- BACKEND: [API DOCS](https://docpro-production.up.railway.app/docs)
+
+- FRONTEND: 
+
 ## Known Limitations
 - No authentication or user permissions.
 - Synchronous processing; large files may be slow.
